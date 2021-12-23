@@ -13,11 +13,4 @@ export function block(index: number): number {
   return Math.floor(y / 3) * 3 + Math.floor(x / 3);
 }
 
-export const stringToNumber = (str: string): number[] =>
-  str
-    .split("")
-    .map(Number)
-    .filter((v) => !Number.isNaN(v))
-    .map((v) => [v]);
-
 export * from "./math";

@@ -14,3 +14,4 @@ export function block(index: number): number {
 }
 
 export * from "./math";
+export * from "./parseREPLInput";

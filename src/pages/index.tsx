@@ -19,7 +19,7 @@ const Home: NextPage = () => {
         <div>
           <button onClick={() => setInput(emptyCells)}>Clear All</button>
         </div>
-        <div ref={refsCellsContainer} className="grid grid-cols-9 gap-1 p-1 bg-gray-200">
+        <div className="grid grid-cols-9 gap-1 p-1 bg-gray-200">
           {cells.map((value: string, index: number) => (
             <CellInput
               key={index}

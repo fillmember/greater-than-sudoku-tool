@@ -59,6 +59,14 @@ describe("parseREPLInput", () => {
         expect(parse("K(2,123)!(2)")).toEqual([[[1, 3]]]);
       });
     });
+    describe("K Sum", () => {
+      test("basic", () => {
+        expect(parse("KSUM(2,6in3)")).toEqual([[[1, 2]], [[1, 3]], [[2, 3]]]);
+      });
+      test("range", () => {
+        expect(parse("KSUM(2,6~7in3)")).toEqual([[[1, 2]], [[1, 3]], [[2, 3]], [[1, 4]], [[2, 4]]]);
+      });
+    });
   });
   describe("parseListSyntax", () => {
     test("basic", () => {

@@ -13,6 +13,7 @@ const REPL: NextPage = () => {
     try {
       editor.setValue(localStorage.getItem("editor-text"), -1);
     } catch (e) {}
+    editor.session.setOptions({ tabSize: 1, useSoftTabs: true });
     editor.session.setUseWrapMode(true);
     editor.commands.addCommand({
       name: "evaluateLine",
@@ -21,7 +22,8 @@ const REPL: NextPage = () => {
         const cursor = editor.selection.getCursor();
         if (!cursor) return;
         const line = editor.session.getLine(cursor.row);
-        if (line.slice(0, 2) === "F ") {
+        const head = line.slice(0, 2);
+        if (head === "F ") {
           const formations = parse(line.slice(2));
           let result;
           if (formations.length > 0) {

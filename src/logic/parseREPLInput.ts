@@ -96,9 +96,7 @@ export const parse = (line: string): number[][][] => {
         return splitToNumbers(str).map(wrapWithArray);
       }
       if (regFormationLiteral.test(str)) {
-        return trim(str, "[]")
-          .split(",")
-          .map((str) => splitToNumbers(str));
+        return uniq(trim(str, "[]").split(",")).map((str) => splitToNumbers(str));
       }
       // with include exclude
       const resultKSum = tryParseForResult(regKSum, str, (ksize, sumInput, csize) => {

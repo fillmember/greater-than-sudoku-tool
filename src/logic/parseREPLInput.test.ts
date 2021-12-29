@@ -5,6 +5,7 @@ describe("parseREPLInput", () => {
     describe("single literal", () => {
       test("basic", () => {
         expect(parse("1-2-3")).toEqual([[[1], [2], [3]]]);
+        expect(parse("123")).toEqual([[[1, 2, 3]]]);
       });
     });
     describe("sum/size syntax", () => {
@@ -58,13 +59,10 @@ describe("parseREPLInput", () => {
         expect(parse("K(2,123)+(2)")).toEqual([[[1, 2]], [[2, 3]]]);
         expect(parse("K(2,123)!(2)")).toEqual([[[1, 3]]]);
       });
-    });
-    describe("K Sum", () => {
-      test("basic", () => {
-        expect(parse("KSUM(2,6in3)")).toEqual([[[1, 2]], [[1, 3]], [[2, 3]]]);
-      });
-      test("range", () => {
-        expect(parse("KSUM(2,6~7in3)")).toEqual([[[1, 2]], [[1, 3]], [[2, 3]], [[1, 4]], [[2, 4]]]);
+      test("compound", () => {
+        expect(parse("K(2, 6in3)")).toEqual([[[1, 2]], [[1, 3]], [[2, 3]]]);
+        expect(parse("K(2, 6~7in3)")).toEqual([[[1, 2]], [[1, 3]], [[2, 3]], [[1, 4]], [[2, 4]]]);
+        expect(parse("K(1, [123,124])")).toEqual([[[1]], [[2]], [[3]], [[4]]]);
       });
     });
   });

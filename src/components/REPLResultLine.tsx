@@ -1,5 +1,5 @@
 import { FC, useEffect, useMemo, useState } from "react";
-import { FaAngleLeft, FaAngleDown, FaArrowRight } from "react-icons/fa";
+import { FaAngleRight, FaAngleDown, FaArrowRight } from "react-icons/fa";
 import clsx from "clsx";
 import noop from "lodash/noop";
 import { arsig } from "../logic";
@@ -34,11 +34,13 @@ export const ResultLine: FC<{
     });
   }, [formations]);
   return (
-    <div key={name} className={clsx("grid grid-cols-12 gap-4", len === 0 && "text-red-600", len === 1 && "text-green-500")}>
-      <span className="col-span-2 truncate">
-        {name} <FaArrowRight className="inline" /> {formations.length}
-      </span>
-      <ul className="col-span-9">
+    <div key={name} className={clsx("flex", len === 0 && "text-red-600", len === 1 && "text-green-500")}>
+      <div className="w-6">
+        {needsTruncation && <button onClick={toggleLineFolding}>{expanded ? <FaAngleDown /> : <FaAngleRight />}</button>}
+      </div>
+      <div className="w-12">{name}</div>
+      <div className="w-24">{formations.length}</div>
+      <ul className="flex-grow-1">
         {formations.slice(0, !needsTruncation || expanded ? len + 1 : 2).map((f, formationIndex) => (
           <li key={formationIndex}>
             {f
@@ -63,11 +65,6 @@ export const ResultLine: FC<{
         )}
         {len === 0 && <li>no formations found</li>}
       </ul>
-      {needsTruncation && (
-        <div className="col-span-1 text-right">
-          <button onClick={toggleLineFolding}>{expanded ? <FaAngleDown /> : <FaAngleLeft />}</button>
-        </div>
-      )}
     </div>
   );
 };

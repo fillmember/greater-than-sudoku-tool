@@ -128,7 +128,7 @@ export const parse = (line: string): number[][][] => {
   return formation(...combinations);
 };
 export const regFormation = /^(?:F\s)|(?:[A-Z]\d\s?=\s?)/;
-export const refCrossRef = /^X\s/;
+export const refCrossRef = /^INTERSECT|DEDUPE\s/;
 export const parseAll = debounce((value: string, submit) => {
   const data: Record<string, number[][][]> = {};
   const lines = value.split("\n");
@@ -141,13 +141,12 @@ export const parseAll = debounce((value: string, submit) => {
     }
     const crossReferenceMatches = refCrossRef.exec(line);
     if (crossReferenceMatches) {
-      const content = line.slice(2);
+      const content = line;
       try {
         const [command, ...accessors] = content.split(/\s?[\,\s]\s?/);
         const [[nameA, indexA], [nameB, indexB]] = accessors.map((str) => str.split("."));
-        switch (command.toLowerCase()) {
-          case "==":
-          case "intersect":
+        switch (command) {
+          case "INTERSECT":
             const targetA = uniq(data[nameA].map((arr) => get(arr, indexA)));
             const targetB = uniq(data[nameB].map((arr) => get(arr, indexB)));
             const intersected = intersect(targetA, targetB);
@@ -155,7 +154,7 @@ export const parseAll = debounce((value: string, submit) => {
             data[nameA] = data[nameA].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexA))) > -1);
             data[nameB] = data[nameB].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexB))) > -1);
             break;
-          case "dedupe":
+          case "DEDUPE":
             const zipped = cartesian(data[nameA], data[nameB]).filter(([a, b]) => {
               const union = [...get(a, indexA), ...get(b, indexB)];
               return uniq(union).length === union.length;

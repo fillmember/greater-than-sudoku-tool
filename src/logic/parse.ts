@@ -1,8 +1,11 @@
+import debounce from "lodash/debounce";
+import get from "lodash/get";
 import range from "lodash/range";
+import trim from "lodash/trim";
 import uniq from "lodash/uniq";
 import uniqBy from "lodash/uniqBy";
-import trim from "lodash/trim";
-import { kcombination, formation, combination, digits, findClosingParenthesis } from ".";
+import { cartesian, kcombination, formation, combination, digits, findClosingParenthesis } from ".";
+import { intersect, arsig } from "../logic/set";
 
 const wrapWithArray = <T = unknown>(v: T): T[] => [v];
 function splitToNumbers(input: string, delimiter = ""): number[] {
@@ -124,3 +127,45 @@ export const parse = (line: string): number[][][] => {
   const combinations: number[][][] = groups.map(groupToCombination).filter((arr) => arr instanceof Array && arr.length > 0);
   return formation(...combinations);
 };
+export const regFormation = /^(?:F\s)|(?:[A-Z]\d\s?=\s?)/;
+export const refCrossRef = /^X\s/;
+export const parseAll = debounce((value: string, submit) => {
+  const data: Record<string, number[][][]> = {};
+  const lines = value.split("\n");
+  lines.forEach((line) => {
+    const formationMatches = regFormation.exec(line);
+    if (formationMatches) {
+      const head = formationMatches[0];
+      const formations = parse(line.slice(head.length));
+      data[trim(head, " =")] = formations;
+    }
+    const crossReferenceMatches = refCrossRef.exec(line);
+    if (crossReferenceMatches) {
+      const content = line.slice(2);
+      try {
+        const [command, ...accessors] = content.split(/\s?[\,\s]\s?/);
+        const [[nameA, indexA], [nameB, indexB]] = accessors.map((str) => str.split("."));
+        switch (command.toLowerCase()) {
+          case "==":
+          case "intersect":
+            const targetA = uniq(data[nameA].map((arr) => get(arr, indexA)));
+            const targetB = uniq(data[nameB].map((arr) => get(arr, indexB)));
+            const intersected = intersect(targetA, targetB);
+            const sigsToKeep = intersected.map(arsig);
+            data[nameA] = data[nameA].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexA))) > -1);
+            data[nameB] = data[nameB].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexB))) > -1);
+            break;
+          case "dedupe":
+            const zipped = cartesian(data[nameA], data[nameB]).filter(([a, b]) => {
+              const union = [...get(a, indexA), ...get(b, indexB)];
+              return uniq(union).length === union.length;
+            });
+            data[nameA] = uniq(zipped.map((arr) => arr[0]));
+            data[nameB] = uniq(zipped.map((arr) => arr[1]));
+            break;
+        }
+      } catch (error) {}
+    }
+  });
+  submit(data);
+}, 500);

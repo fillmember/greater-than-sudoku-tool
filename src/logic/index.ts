@@ -1,6 +1,4 @@
-export const emptyCells = "000000000000000000000000000000000000000000000000000000000000000000000000000000000";
 export const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-export const initialPossibilities = emptyCells.split("").map(() => digits.slice(0));
 export function row(index: number): number {
   return Math.floor(index / 9);
 }
@@ -25,5 +23,6 @@ export function findClosingParenthesis(str: string, startIndex = 0) {
   return index;
 }
 
+export * from "./set";
 export * from "./math";
-export * from "./parseREPLInput";
+export * from "./parse";

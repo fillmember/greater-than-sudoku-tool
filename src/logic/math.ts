@@ -1,4 +1,5 @@
 import uniq from "lodash/uniq";
+import { memoArsig as arsig, equalSet } from "./set";
 export function combination(size: number, sum: number): number[][] {
   if (sum === 0) return [];
   if (size === 1) {
@@ -11,18 +12,14 @@ export function combination(size: number, sum: number): number[][] {
     const subCombination = combination(size - 1, sum - i);
     subCombination.forEach((combo) => {
       const combination: number[] = [i, ...combo].sort();
-      const stringed = combination.toString();
+      const signatureCombination = arsig(combination);
       const uniqued = uniq(combination);
-      if (uniqued.length === combination.length && result.every((item) => item.toString() !== stringed)) {
+      if (uniqued.length === combination.length && result.every((item) => arsig(item) !== signatureCombination)) {
         result.push(combination);
       }
     });
   }
   return result;
-}
-
-function equalSet(a: unknown[], b: unknown[]) {
-  return a.sort().toString() === b.sort().toString();
 }
 
 export function kcombination<T = unknown>(size: number, set: T[]): T[][] {

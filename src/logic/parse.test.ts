@@ -1,6 +1,6 @@
 import { parse, matchFromListSyntax } from ".";
 
-describe("parseREPLInput", () => {
+describe("parse REPL inputs", () => {
   describe("parse", () => {
     describe("single literal", () => {
       test("basic", () => {

@@ -27,10 +27,10 @@ export const conf: languages.LanguageConfiguration = {
 export const language: languages.IMonarchLanguage = {
   defaultToken: "invalid",
   operators: ["=", "+", "!", "~"],
-  keywords: ["DEDUPE", "INTERSECT", "in", "K"],
+  keywords: ["SUM", "SEE", "INTERSECT", "in", "K", "A<B"],
   // regular expressions
   symbols: /[\=\+\!\~]/,
-  name: /[BCR][123456789]/,
+  name: /[A-Z][1-9]/,
   tokenizer: {
     root: [
       [/\s+/, "whitespace"],
@@ -43,7 +43,7 @@ export const language: languages.IMonarchLanguage = {
       [/-/, "delimiter.group"],
       [/#/, "@rematch", "comment"],
       [
-        /[a-zA-Z]+/,
+        /[a-zA-Z<>]+/,
         {
           cases: {
             "@keywords": "keyword",

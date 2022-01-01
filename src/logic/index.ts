@@ -14,7 +14,7 @@ export function block(index: number): number {
 export function findClosingParenthesis(str: string, startIndex = 0) {
   let index = startIndex;
   let counter = 1;
-  while (counter > 0) {
+  while (counter > 0 && index < str.length) {
     index = index + 1;
     const c = str[index];
     if (c === "(") counter++;

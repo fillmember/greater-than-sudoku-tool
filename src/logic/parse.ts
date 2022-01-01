@@ -4,8 +4,11 @@ import range from "lodash/range";
 import trim from "lodash/trim";
 import uniq from "lodash/uniq";
 import uniqBy from "lodash/uniqBy";
+import sum from "lodash/sum";
+import memoize from "lodash/memoize";
 import { cartesian, kcombination, formation, combination, digits, findClosingParenthesis } from ".";
 import { intersect, arsig } from "../logic/set";
+const memosum = memoize(sum);
 
 const wrapWithArray = <T = unknown>(v: T): T[] => [v];
 function splitToNumbers(input: string, delimiter = ""): number[] {
@@ -128,7 +131,7 @@ export const parse = (line: string): number[][][] => {
   return formation(...combinations);
 };
 export const regFormation = /^(?:F\s)|(?:[A-Z]\d\s?=\s?)/;
-export const refCrossRef = /^INTERSECT|DEDUPE\s/;
+export const refCrossRef = /^INTERSECT|SEE|SUM|A<B/;
 export const parseAll = debounce((value: string, submit) => {
   const data: Record<string, number[][][]> = {};
   const lines = value.split("\n");
@@ -143,8 +146,8 @@ export const parseAll = debounce((value: string, submit) => {
     if (crossReferenceMatches) {
       const content = line;
       try {
-        const [command, ...accessors] = content.split(/\s?[\,\s]\s?/);
-        const [[nameA, indexA], [nameB, indexB]] = accessors.map((str) => str.split("."));
+        const [command, ...args] = content.split(/\s?[\,\s]\s?/);
+        const [[nameA, indexA], [nameB, indexB]] = args.map((str) => str.split("."));
         switch (command) {
           case "INTERSECT":
             const targetA = uniq(data[nameA].map((arr) => get(arr, indexA)));
@@ -154,13 +157,31 @@ export const parseAll = debounce((value: string, submit) => {
             data[nameA] = data[nameA].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexA))) > -1);
             data[nameB] = data[nameB].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexB))) > -1);
             break;
-          case "DEDUPE":
+          case "SEE":
             const zipped = cartesian(data[nameA], data[nameB]).filter(([a, b]) => {
               const union = [...get(a, indexA), ...get(b, indexB)];
               return uniq(union).length === union.length;
             });
             data[nameA] = uniq(zipped.map((arr) => arr[0]));
             data[nameB] = uniq(zipped.map((arr) => arr[1]));
+            break;
+          case "SUM":
+            const zipped2 = cartesian(data[nameA], data[nameB]).filter(([a, b]) => {
+              const arr = [...get(a, indexA), ...get(b, indexB)];
+              return sum(arr) === Number(args[2]);
+            });
+            data[nameA] = uniq(zipped2.map((arr) => arr[0]));
+            data[nameB] = uniq(zipped2.map((arr) => arr[1]));
+            break;
+          case "A<B":
+            const offset = Number(args[2]);
+            const zipped3 = cartesian(data[nameA], data[nameB]).filter(([a, b]) => {
+              const sumA = memosum(get(a, indexA));
+              const sumB = memosum(get(b, indexB));
+              return sumA < sumB + offset;
+            });
+            data[nameA] = uniq(zipped3.map((arr) => arr[0]));
+            data[nameB] = uniq(zipped3.map((arr) => arr[1]));
             break;
         }
       } catch (error) {}

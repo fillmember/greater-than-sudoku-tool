@@ -161,7 +161,7 @@ export const parse = (line: string, data?: Record<string, number[][][]>): number
   return formation(...combinations);
 };
 export const regFormation = /^(?:F\s)|(?:[A-Z]\d\s?=\s?)/;
-export const refCrossRef = /^INTERSECT|SEE|SUM|A<B|A>B|A<=B|A>=B|BORDER/;
+export const refCrossRef = /^INTERSECT|SEE|SUM|A<B|A>B|A<=B|A=B|A>=B|BORDER/;
 export const parseAll = debounce((value: string, submit) => {
   const data: Record<string, number[][][]> = {};
   const lines = value.split("\n");
@@ -247,6 +247,10 @@ export const parseAll = debounce((value: string, submit) => {
             }
             case "A<=B": {
               compareAandB("<=", data, nameA, indexA, nameB, indexB);
+              break;
+            }
+            case "A=B": {
+              compareAandB("=", data, nameA, indexA, nameB, indexB);
               break;
             }
             case "BORDER": {

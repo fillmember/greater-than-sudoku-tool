@@ -1,13 +1,14 @@
 import sum from "lodash/sum";
 import get from "lodash/get";
 
-export type CompareMode = ">" | "<" | ">=" | "<=";
+export type CompareMode = ">" | "<" | ">=" | "<=" | "=";
 
 const compareFunctions: Record<CompareMode, (a: number, b: number) => boolean> = {
   ">": (a, b) => a > b,
   "<": (a, b) => a < b,
   ">=": (a, b) => a >= b,
   "<=": (a, b) => a <= b,
+  "=": (a, b) => a === b,
 };
 
 export function compareAandB(
@@ -37,6 +38,8 @@ export function compareAandB(
       data[nameB] = data[nameB].filter((_, index) => compare(minSumA, arrSumB[index]));
       // any A needs to be greater than the greatest of B
       data[nameA] = data[nameA].filter((_, index) => compare(arrSumA[index], maxSumB));
+    } else {
+      // TBD
     }
   } else {
     // algorithm for cases where the sum is considering within the same line

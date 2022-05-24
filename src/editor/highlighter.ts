@@ -27,7 +27,7 @@ export const conf: languages.LanguageConfiguration = {
 export const language: languages.IMonarchLanguage = {
   defaultToken: "invalid",
   operators: ["=", "+", "!", "~"],
-  keywords: ["SUM", "SEE", "INTERSECT", "in", "K", "A<B", "A>B", "CMD"],
+  keywords: ["SUM", "SEE", "INTERSECT", "in", "K", "REF", "A<B", "A>B", "A<=B", "A>=B"],
   // regular expressions
   symbols: /[\=\+\!\~]/,
   name: /[A-Z][1-9]/,

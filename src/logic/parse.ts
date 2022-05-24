@@ -9,6 +9,7 @@ import sum from "lodash/sum";
 import memoize from "lodash/memoize";
 import { cartesian, kcombination, formation, combination, digits, findClosingParenthesis } from ".";
 import { intersect, arsig } from "../logic/set";
+import { compareAandB } from "./commands";
 const memosum = memoize(sum);
 
 const wrapWithArray = <T = unknown>(v: T): T[] => [v];
@@ -87,7 +88,7 @@ const groupToCombination = (str: string, data?: Record<string, number[][][]>): n
     if (!data) return [];
     const matches = regREF.exec(str);
     if (!matches) return [];
-    const rawArguments = matches[1].split(",");
+    const rawArguments = matches[1].split(",").filter((str) => str.length > 0);
     if (rawArguments.length === 0) return [];
     const args = rawArguments.map((arg) => {
       const [name, index] = arg.split(".");
@@ -160,7 +161,7 @@ export const parse = (line: string, data?: Record<string, number[][][]>): number
   return formation(...combinations);
 };
 export const regFormation = /^(?:F\s)|(?:[A-Z]\d\s?=\s?)/;
-export const refCrossRef = /^INTERSECT|SEE|SUM|A<B|A>B|CMD/;
+export const refCrossRef = /^INTERSECT|SEE|SUM|A<B|A>B|A<=B|A>=B|BORDER/;
 export const parseAll = debounce((value: string, submit) => {
   const data: Record<string, number[][][]> = {};
   const lines = value.split("\n");
@@ -233,50 +234,41 @@ export const parseAll = debounce((value: string, submit) => {
               break;
             }
             case "A>B": {
-              if (nameA !== nameB) {
-                // algorithm for cases where the sum is considering 2 different lines
-                const arrSumA = data[nameA].map((set) => sum(get(set, indexA)));
-                const maxSumA = Math.max(...arrSumA);
-                const arrSumB = data[nameB].map((set) => sum(get(set, indexB)));
-                const minSumB = Math.min(...arrSumB);
-                // any A needs to be smaller than the smallest of B
-                data[nameA] = data[nameA].filter((_, index) => arrSumA[index] > minSumB);
-                // any B needs to be greater than the greatest of A
-                data[nameB] = data[nameB].filter((_, index) => maxSumA > arrSumB[index]);
-              } else {
-                // algorithm for cases where the sum is considering within the same line
-                data[nameA] = data[nameA].filter((set) => {
-                  const a = sum(get(set, indexA));
-                  const b = sum(get(set, indexB));
-                  return a > b;
-                });
-              }
+              compareAandB(">", data, nameA, indexA, nameB, indexB);
               break;
             }
             case "A<B": {
-              if (nameA !== nameB) {
-                // algorithm for cases where the sum is considering 2 different lines
-                const arrSumA = data[nameA].map((set) => sum(get(set, indexA)));
-                const maxSumA = Math.max(...arrSumA);
-                const arrSumB = data[nameB].map((set) => sum(get(set, indexB)));
-                const minSumB = Math.min(...arrSumB);
-                // any A needs to be smaller than the smallest of B
-                data[nameA] = data[nameA].filter((_, index) => arrSumA[index] < minSumB);
-                // any B needs to be greater than the greatest of A
-                data[nameB] = data[nameB].filter((_, index) => maxSumA < arrSumB[index]);
-              } else {
-                // algorithm for cases where the sum is considering within the same line
-                data[nameA] = data[nameA].filter((set) => {
-                  const a = sum(get(set, indexA));
-                  const b = sum(get(set, indexB));
-                  return a < b;
-                });
-              }
+              compareAandB("<", data, nameA, indexA, nameB, indexB);
               break;
             }
-            case "CMD": {
-              console.log("CMD", content.slice(3));
+            case "A>=B": {
+              compareAandB(">=", data, nameA, indexA, nameB, indexB);
               break;
+            }
+            case "A<=B": {
+              compareAandB("<=", data, nameA, indexA, nameB, indexB);
+              break;
+            }
+            case "BORDER": {
+              const [nameA, nameB, ...rawRelations] = args;
+              const relations = rawRelations
+                .map((rule) => {
+                  const [indexA, indexB, sum] = rule.split(/[\+\=]/).map(Number);
+                  return { indexA, indexB, sum };
+                })
+                .filter((x) => Object.values(x).every((n) => !Number.isNaN(n) && n !== undefined));
+              data[nameA] = data[nameA].filter((groupA) =>
+                relations.every(({ indexA, indexB, sum: target }) => {
+                  const sumA = sum(groupA[indexA]);
+                  return data[nameB].some((groupB) => sumA + sum(groupB[indexB]) === target);
+                })
+              );
+              data[nameB] = data[nameB].filter((groupB) =>
+                relations.every(({ indexA, indexB, sum: target }) => {
+                  const sumB = sum(groupB[indexB]);
+                  return data[nameA].some((groupA) => sumB + sum(groupA[indexA]) === target);
+                })
+              );
             }
           }
         } catch (error) {}

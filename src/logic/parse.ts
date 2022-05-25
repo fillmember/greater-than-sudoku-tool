@@ -6,11 +6,9 @@ import uniq from "lodash/uniq";
 import uniqBy from "lodash/uniqBy";
 import inRange from "lodash/inRange";
 import sum from "lodash/sum";
-import memoize from "lodash/memoize";
 import { cartesian, kcombination, formation, combination, digits, findClosingParenthesis } from ".";
 import { intersect, arsig } from "../logic/set";
 import { compareAandB } from "./commands";
-const memosum = memoize(sum);
 
 const wrapWithArray = <T = unknown>(v: T): T[] => [v];
 function splitToNumbers(input: string, delimiter = ""): number[] {
@@ -86,28 +84,33 @@ const groupToCombination = (str: string, data?: Record<string, number[][][]>): n
   }
   if (regREF.test(str)) {
     if (!data) return [];
-    const matches = regREF.exec(str);
+    const iFirstParenthesisClosing = findClosingParenthesis(str, str.indexOf("("));
+    const mainFunctionArguments = str.slice(0, iFirstParenthesisClosing + 1);
+    const matches = regREF.exec(mainFunctionArguments);
     if (!matches) return [];
     const rawArguments = matches[1].split(",").filter((str) => str.length > 0);
+    const addition = trim(str.slice(iFirstParenthesisClosing + 1));
     if (rawArguments.length === 0) return [];
+    let result: number[][] = [];
     const args = rawArguments.map((arg) => {
       const [name, index] = arg.split(".");
       return { name, index: Number(index) };
     });
     if (uniq(args.map((g) => g.name)).length === 1) {
-      console.log("single line ref mode");
       // algorithm for referencing from one single line: just merge references into one group
       const referredLine = data[args[0].name];
       const indicesToKeep = args.map((g) => g.index);
-      const result: number[][] = [];
       referredLine.forEach((c) => {
         result.push(indicesToKeep.flatMap((j) => c[j]));
       });
-      return result;
     } else {
       // algorithm for referencing from more lines: create a group of cartesian combinations
-      return cartesian(...args.map(({ name, index }) => data[name].map((l) => l[index])).map(uniq)).map((g) => g.flat());
+      result = cartesian(...args.map(({ name, index }) => data[name].map((l) => l[index])).map(uniq)).map((g) => g.flat());
     }
+    result = uniqBy(result, (arr) => arr.sort().join(""));
+    result = parseIncludeExclude("include", addition, result);
+    result = parseIncludeExclude("exclude", addition, result);
+    return result;
   }
   // with include exclude
   if (regKCombination.test(str)) {

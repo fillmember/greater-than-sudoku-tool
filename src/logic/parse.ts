@@ -262,16 +262,14 @@ export const parseAll = debounce((value: string, submit) => {
                 })
                 .filter((x) => Object.values(x).every((n) => !Number.isNaN(n) && n !== undefined));
               data[nameA] = data[nameA].filter((groupA) =>
-                relations.every(({ indexA, indexB, sum: target }) => {
-                  const sumA = sum(groupA[indexA]);
-                  return data[nameB].some((groupB) => sumA + sum(groupB[indexB]) === target);
-                })
+                data[nameB].some((groupB) =>
+                  relations.every(({ indexA, indexB, sum: target }) => sum(groupA[indexA]) + sum(groupB[indexB]) === target)
+                )
               );
               data[nameB] = data[nameB].filter((groupB) =>
-                relations.every(({ indexA, indexB, sum: target }) => {
-                  const sumB = sum(groupB[indexB]);
-                  return data[nameA].some((groupA) => sumB + sum(groupA[indexA]) === target);
-                })
+                data[nameA].some((groupA) =>
+                  relations.every(({ indexA, indexB, sum: target }) => sum(groupB[indexB]) + sum(groupA[indexA]) === target)
+                )
               );
             }
           }

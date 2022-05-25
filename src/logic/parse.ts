@@ -112,7 +112,6 @@ const groupToCombination = (str: string, data?: Record<string, number[][][]>): n
     result = parseIncludeExclude("exclude", addition, result);
     return result;
   }
-  // with include exclude
   if (regKCombination.test(str)) {
     const matches = regKCombination.exec(str);
     if (!matches) return [];
@@ -121,7 +120,7 @@ const groupToCombination = (str: string, data?: Record<string, number[][][]>): n
     const iFirstParenthesisClosing = findClosingParenthesis(str, str.indexOf("("));
     const content = trim(str.slice(iFirstComma + 1, iFirstParenthesisClosing));
     const addition = trim(str.slice(iFirstParenthesisClosing + 1));
-    const combinations = groupToCombination(content);
+    const combinations = groupToCombination(content, data);
     if (!combinations) return [];
     let result = combinations.flatMap((set) => kcombination(ksize, set));
     result = uniqBy(result, (arr) => arr.sort().join(""));

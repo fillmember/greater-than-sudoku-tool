@@ -71,7 +71,7 @@ export function tryParseForResult(reg: RegExp, str: string, fn: (...matches: str
   return result;
 }
 
-const groupToCombination = (str: string, data?: Record<string, number[][][]>): number[][] => {
+const groupToCombination = (str: string, data: Record<string, number[][][]>): number[][] => {
   // simple ones without include/exclude
   if (regSingle.test(str)) {
     return [splitToNumbers(str)];

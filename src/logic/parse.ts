@@ -10,7 +10,7 @@ import pick from "lodash/pick";
 import identity from "lodash/identity";
 import { cartesian, kcombination, formation, combination, digits, findClosingParenthesis } from ".";
 import { intersect, arsig } from "../logic/set";
-import { compareAandB } from "./commands";
+import { compareAandB, getArgs2, getCommandHead } from "./commands";
 
 const wrapWithArray = <T = unknown>(v: T): T[] => [v];
 function splitToNumbers(input: string, delimiter = ""): number[] {
@@ -166,16 +166,29 @@ export const parse = (line: string, data: Record<string, number[][][]>): number[
   return formation(...combinations);
 };
 export const regFormation = /^(?:F\s)|(?:[A-Z]\d\s?=\s?)/;
-export const refCrossRef = /^INTERSECT|SEE|SUM|A<B|A>B|A<=B|A=B|A>=B|BORDER|A_HAS_B|A_IN_B/;
+export const refCrossRef = /^INTERSECT|SEE|SUM|A<B|A>B|A<=B|A=B|A>=B|BORDER|A_HAS_B|A_IN_B|FN/;
 export const crossReference = (line: string, data: Record<string, number[][][]>) => {
   const crossReferenceMatches = refCrossRef.exec(line);
   if (crossReferenceMatches) {
-    const content = line;
     try {
-      const [command, ...args] = content.split(/\s?[\,\s]\s?/);
-      const [[nameA, indexA], [nameB, indexB]] = args.map((str) => str.split("."));
+      const [command, rest] = getCommandHead(line);
+      // const [command, ...args] = content.split(/\s?[\,\s]\s?/);
+      // const [[nameA, indexA], [nameB, indexB]] = args.map((str) => str.split("."));
       switch (command) {
+        case "FN": {
+          const code = line.slice(command.length);
+          try {
+            const fn = new Function("d", "t", code);
+            fn(data, { sum, arsig });
+            return true;
+          } catch (error) {
+            console.log("silently failing at running user function", error);
+            return false;
+          }
+        }
         case "A_IN_B": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           data[nameA] = data[nameA].filter((formA) => {
             const a: number[] = get(formA, indexA);
             const result = data[nameB].some((formB) => {
@@ -187,6 +200,8 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "A_HAS_B": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           data[nameA] = data[nameA].filter((formA) => {
             const a: number[] = get(formA, indexA);
             const result = data[nameB].some((formB) => {
@@ -206,6 +221,8 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "INTERSECT": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           const targetA = uniq(data[nameA].map((arr) => get(arr, indexA)));
           const targetB = uniq(data[nameB].map((arr) => get(arr, indexB)));
           const intersected = intersect(targetA, targetB);
@@ -215,6 +232,8 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "SEE": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           const zipped = cartesian(data[nameA], data[nameB]).filter(([a, b]) => {
             const union = [...get(a, indexA), ...get(b, indexB)];
             return uniq(union).length === union.length;
@@ -224,6 +243,8 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "SUM": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           let min: number, max: number;
           const numArg2 = Number(args[2]);
           const numArg3 = Number(args[3]);
@@ -255,22 +276,32 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "A>B": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           compareAandB(">", data, nameA, indexA, nameB, indexB);
           return true;
         }
         case "A<B": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           compareAandB("<", data, nameA, indexA, nameB, indexB);
           return true;
         }
         case "A>=B": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           compareAandB(">=", data, nameA, indexA, nameB, indexB);
           return true;
         }
         case "A<=B": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           compareAandB("<=", data, nameA, indexA, nameB, indexB);
           return true;
         }
         case "A=B": {
+          if (typeof rest === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
           compareAandB("=", data, nameA, indexA, nameB, indexB);
           return true;
         }
@@ -306,7 +337,9 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
       }
-    } catch (error) {}
+    } catch (error) {
+      console.error("crossRef error", error);
+    }
     return false;
   }
 };

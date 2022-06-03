@@ -11,6 +11,15 @@ const compareFunctions: Record<CompareMode, (a: number, b: number) => boolean> =
   "=": (a, b) => a === b,
 };
 
+export function getCommandHead(content: string) {
+  const [command, ...rest] = content.split(/\s?[\,\s]\s?/);
+  return [command, rest];
+}
+export function getArgs2(args: string[]) {
+  const [[nameA, indexA], [nameB, indexB]] = args.map((str) => str.split("."));
+  return { nameA, indexA, nameB, indexB };
+}
+
 export function compareAandB(
   mode: CompareMode,
   data: Record<string, number[][][]>,

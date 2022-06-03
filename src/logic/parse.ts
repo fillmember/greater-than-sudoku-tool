@@ -171,9 +171,7 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
   const crossReferenceMatches = refCrossRef.exec(line);
   if (crossReferenceMatches) {
     try {
-      const [command, rest] = getCommandHead(line);
-      // const [command, ...args] = content.split(/\s?[\,\s]\s?/);
-      // const [[nameA, indexA], [nameB, indexB]] = args.map((str) => str.split("."));
+      const [command, restOfArgs] = getCommandHead(line);
       switch (command) {
         case "FN": {
           const code = line.slice(command.length);
@@ -187,8 +185,8 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           }
         }
         case "A_IN_B": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           data[nameA] = data[nameA].filter((formA) => {
             const a: number[] = get(formA, indexA);
             const result = data[nameB].some((formB) => {
@@ -200,8 +198,8 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "A_HAS_B": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           data[nameA] = data[nameA].filter((formA) => {
             const a: number[] = get(formA, indexA);
             const result = data[nameB].some((formB) => {
@@ -221,8 +219,8 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "INTERSECT": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           const targetA = uniq(data[nameA].map((arr) => get(arr, indexA)));
           const targetB = uniq(data[nameB].map((arr) => get(arr, indexB)));
           const intersected = intersect(targetA, targetB);
@@ -232,8 +230,8 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "SEE": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           const zipped = cartesian(data[nameA], data[nameB]).filter(([a, b]) => {
             const union = [...get(a, indexA), ...get(b, indexB)];
             return uniq(union).length === union.length;
@@ -243,11 +241,11 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "SUM": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           let min: number, max: number;
-          const numArg2 = Number(args[2]);
-          const numArg3 = Number(args[3]);
+          const numArg2 = Number(restOfArgs[2]);
+          const numArg3 = Number(restOfArgs[3]);
           if (Number.isNaN(numArg3)) {
             min = numArg2;
             max = numArg2 + 1;
@@ -276,37 +274,38 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
           return true;
         }
         case "A>B": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           compareAandB(">", data, nameA, indexA, nameB, indexB);
           return true;
         }
         case "A<B": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           compareAandB("<", data, nameA, indexA, nameB, indexB);
           return true;
         }
         case "A>=B": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           compareAandB(">=", data, nameA, indexA, nameB, indexB);
           return true;
         }
         case "A<=B": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           compareAandB("<=", data, nameA, indexA, nameB, indexB);
           return true;
         }
         case "A=B": {
-          if (typeof rest === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(rest);
+          if (typeof restOfArgs === "string") return;
+          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
           compareAandB("=", data, nameA, indexA, nameB, indexB);
           return true;
         }
         case "BORDER": {
-          const [nameA, nameB, ...rawRelations] = args;
+          if (typeof restOfArgs === "string") return;
+          const [nameA, nameB, ...rawRelations] = restOfArgs;
           const relations = rawRelations
             .map((rule) => {
               const [indexA, indexB, sumInput] = rule.split(/[\+\=]/);
@@ -320,17 +319,24 @@ export const crossReference = (line: string, data: Record<string, number[][][]>)
               return { indexA: Number(indexA), indexB: Number(indexB), sum };
             })
             .filter((x) => Object.values(x).every((n) => !Number.isNaN(n) && n !== undefined));
+          const disjoint = (a: number[], b: number[]): boolean => {
+            const sa = arsig(a);
+            const sb = arsig(b).split("");
+            return sb.every((digit) => sa.indexOf(digit) === -1);
+          };
           data[nameA] = data[nameA].filter((groupA) =>
             data[nameB].some((groupB) =>
-              relations.every(({ indexA, indexB, sum: target }) =>
-                inRange(sum(groupA[indexA]) + sum(groupB[indexB]), target[0], target[1] + 1)
+              relations.every(
+                ({ indexA, indexB, sum: target }) =>
+                  inRange(sum(groupA[indexA]) + sum(groupB[indexB]), target[0], target[1] + 1) && disjoint(groupA[indexA], groupB[indexB])
               )
             )
           );
           data[nameB] = data[nameB].filter((groupB) =>
             data[nameA].some((groupA) =>
-              relations.every(({ indexA, indexB, sum: target }) =>
-                inRange(sum(groupB[indexB]) + sum(groupA[indexA]), target[0], target[1] + 1)
+              relations.every(
+                ({ indexA, indexB, sum: target }) =>
+                  inRange(sum(groupB[indexB]) + sum(groupA[indexA]), target[0], target[1] + 1) && disjoint(groupA[indexA], groupB[indexB])
               )
             )
           );

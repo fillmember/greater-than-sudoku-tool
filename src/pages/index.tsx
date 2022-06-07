@@ -7,6 +7,8 @@ import { ResultLine } from "../components/REPLResultLine";
 import { crossReference, parseAll } from "../logic";
 import { configure } from "../editor";
 
+const formatFormationsForPrint = (forms: number[][][]): string => forms.map((n) => "\t" + n.map((j) => j.join("")).join("-")).join("\n");
+
 const REPL: NextPage = () => {
   const monaco = useMonaco();
   const refEditor = useRef<editor.IStandaloneCodeEditor | null>(null);
@@ -51,8 +53,46 @@ const REPL: NextPage = () => {
           lineHeight: 24,
         }}
         height="60vh"
-        onMount={(editor) => {
+        onMount={(editor, _monaco) => {
           refEditor.current = editor;
+          // register editor action
+          // editor.addAction({
+          //   id: "print-line-formations",
+          //   label: "Print Line Formations",
+          //   precondition: "editorTextFocus",
+          //   keybindings: [_monaco.KeyMod.CtrlCmd | _monaco.KeyCode.Enter],
+          //   run: async (_editor) => {
+          //     const model = _editor.getModel();
+          //     if (!model) return;
+          //     const selections = _editor.getSelections();
+          //     if (!selections) return;
+          //     // parseAll if data is empty
+          //     let latestData: Record<string, number[][][]>;
+          //     if (Object.keys(data).length === 0) {
+          //       console.log("reconstruct data because data is empty");
+          //       latestData = await new Promise((resolve) => {
+          //         parseAll(_editor.getValue(), (d: Record<string, number[][][]>) => resolve(d), clone(data));
+          //       });
+          //     } else {
+          //       latestData = data;
+          //     }
+          //     // create edits
+          //     const edits: editor.IIdentifiedSingleEditOperation[] = [];
+          //     selections.forEach((selection) => {
+          //       const { positionLineNumber, positionColumn } = selection;
+          //       const lineContent = model.getLineContent(positionLineNumber);
+          //       const matches = /^([A-Z]+\d+)\s?=/.exec(lineContent);
+          //       if (!matches) return;
+          //       const range = new _monaco.Range(positionLineNumber, positionColumn, positionLineNumber, positionColumn);
+          //       const forms = latestData[matches[1]];
+          //       if (!forms) return;
+          //       const text = `\n${formatFormationsForPrint(forms)}`;
+          //       edits.push({ range, text });
+          //     });
+          //     editor.executeEdits(undefined, edits);
+          //   },
+          // });
+          // load saved value from LocalStorage
           const savedValue = localStorage.getItem("editor-text");
           if (savedValue) {
             editor.setValue(savedValue);
@@ -74,6 +114,16 @@ const REPL: NextPage = () => {
             onItemClick={({ name, groupIndex }) => {
               if (!editor) return;
               editor.trigger("keyboard", "type", { text: `${name}.${groupIndex} ` });
+            }}
+            onPrint={({ name }) => {
+              if (!editor || !monaco) return;
+              const selection = editor.getSelection();
+              if (!selection) return;
+              const text = "\n" + formatFormationsForPrint(data[name]);
+              const { positionLineNumber, positionColumn } = selection;
+              const range = new monaco.Range(positionLineNumber, positionColumn, positionLineNumber, positionColumn);
+              const edits: editor.IIdentifiedSingleEditOperation[] = [{ range, text }];
+              editor.executeEdits(undefined, edits);
             }}
           />
         ))}

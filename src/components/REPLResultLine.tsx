@@ -1,46 +1,34 @@
-import { FC, useEffect, useMemo, useState } from "react";
-import { FaAngleRight, FaAngleDown, FaArrowRight } from "react-icons/fa";
+import { FC, useMemo } from "react";
+import { IoMdCopy, IoMdPrint, IoMdArrowForward } from "react-icons/io";
 import clsx from "clsx";
 import noop from "lodash/noop";
 import uniq from "lodash/uniq";
+import inRange from "lodash/inRange";
+import padStart from "lodash/padStart";
+
+const clsActionBtn = "inline-block p-1 hover:bg-black hover:text-white rounded";
 
 export const ResultLine: FC<{
   name: string;
   formations: number[][][];
   onItemClick?: (args: { name: string; groupIndex: number }) => void;
-}> = ({ name, formations, onItemClick = noop }) => {
-  const [expanded, setExpanded] = useState<boolean>(true);
-  const [touched, setTouched] = useState<boolean>(false);
+  onPrint?: (args: { name: string }) => void;
+}> = ({ name, formations, onItemClick = noop, onPrint = noop }) => {
   const len = formations.length;
-  const needsTruncation = len > 0;
-  useEffect(() => {
-    if (needsTruncation && !touched) {
-      // should be folded by default
-      setExpanded(false);
-    }
-  }, [needsTruncation, len, expanded, touched]);
-  const toggleLineFolding = () => {
-    setExpanded((v) => !v);
-    setTouched(true);
-  };
   const possibilitiesEachGroup: string[][] = useMemo(() => {
-    if (formations.length === 0) return [];
+    if (len === 0) return [];
     return formations[0].map((_, groupIndex) => uniq(formations.map((x) => x[groupIndex]).map((x) => x.join(""))).sort());
-  }, [formations]);
+  }, [len, formations]);
   return (
-    <div key={name} className={clsx("flex mb-1", len === 0 && "text-red-600", len === 1 && "text-green-500")}>
-      <div className="w-4 shrink-0">
-        {needsTruncation && formations.length > 1 && (
-          <button className="mt-px" onClick={toggleLineFolding}>
-            {expanded ? <FaAngleDown /> : <FaAngleRight />}
-          </button>
-        )}
+    <div key={name} className={clsx("flex", len === 0 && "text-red-600", len === 1 && "text-green-500")}>
+      <div className="shrink-0 pr-2">
+        {name}
+        <IoMdArrowForward className="inline-block text-sm text-gray-500" />
+        {padStart(len.toString(), 2, "0")}
       </div>
-      <div className="w-12 shrink-0">{name}</div>
-      <div className="w-8 shrink-0">{formations.length}</div>
       <ul className="flex-grow">
         <li>
-          {formations.length > 0 &&
+          {len > 0 &&
             formations[0].map((_, groupIndex, groupArr) => {
               const possibilities = possibilitiesEachGroup[groupIndex];
               return (
@@ -48,7 +36,7 @@ export const ResultLine: FC<{
                   <button key={groupIndex} className="hover:underline" onClick={() => onItemClick({ name, groupIndex })}>
                     {possibilities.length <= 20 && (
                       <>
-                        [
+                        {possibilities.length > 1 && "["}
                         {possibilities.map((x, j, arr) => (
                           <>
                             <span key={j} className={clsx(possibilities.length === 1 && "text-green-500")}>
@@ -57,7 +45,7 @@ export const ResultLine: FC<{
                             {j + 1 < arr.length ? "," : ""}
                           </>
                         ))}
-                        ]
+                        {possibilities.length > 1 && "]"}
                       </>
                     )}
                     {possibilities.length > 20 && (
@@ -74,8 +62,7 @@ export const ResultLine: FC<{
               );
             })}
         </li>
-        {expanded &&
-          1 < len &&
+        {inRange(len, 2, 10) &&
           formations.map((f, formationIndex) => (
             <li key={formationIndex}>
               {f
@@ -92,9 +79,9 @@ export const ResultLine: FC<{
           ))}
         {len === 0 && <li>no formations found</li>}
       </ul>
-      <div className="shrink-0">
+      <div className="shrink-0 text-lg">
         <button
-          className="hover:underline"
+          className={clsActionBtn}
           onClick={(evt) => {
             const txt = `${name} = ${possibilitiesEachGroup
               .map((x) =>
@@ -109,7 +96,10 @@ export const ResultLine: FC<{
             navigator.clipboard.writeText(txt);
           }}
         >
-          copy
+          <IoMdCopy />
+        </button>
+        <button className={clsActionBtn} onClick={() => onPrint({ name })}>
+          <IoMdPrint />
         </button>
       </div>
     </div>

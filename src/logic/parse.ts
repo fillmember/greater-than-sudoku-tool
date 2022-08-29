@@ -150,10 +150,12 @@ export const groupToCombination = (str: string, data: Record<string, number[][][
   if (regKCombination.test(str)) {
     const matches = regKCombination.exec(str);
     if (!matches) return [];
-    const [strKFn, strKSize, strRestArgs] = matches;
-    const ksize = Number(strKSize);
-    const [content] = strRestArgs.split(",");
-    const addition = trim(str.slice(strKFn.length));
+    const ksize = Number(matches[1]);
+    const iFirstComma = str.indexOf(",");
+    const iFirstParenthesisClosing = findClosingParenthesis(str, str.indexOf("("));
+    const content = trim(str.slice(iFirstComma + 1, iFirstParenthesisClosing));
+    const addition = trim(str.slice(iFirstParenthesisClosing + 1));
+    // oh no
     const combinations = groupToCombination(content, data);
     if (!combinations) return [];
     let result = combinations.flatMap((set) => kcombination(ksize, set));

@@ -1,4 +1,4 @@
-import { debounce, get, range, trim, uniq, uniqBy, inRange, sum, pick, identity, lowerCase } from "lodash";
+import { debounce, get, range, trim, uniq, uniqBy, inRange, sum, pick, identity, lowerCase, negate } from "lodash";
 import { digits, findClosingParenthesis } from "./utils";
 import { cartesian, kcombination, formation, combination } from "./math";
 import { intersect, arsig, hasOverlap } from "../logic/set";
@@ -17,6 +17,8 @@ import {
   regFormation,
   match,
   regFormationPosition,
+  regOutsideInclude,
+  regOutsideExclude,
 } from "./regexps";
 
 const wrapWithArray = <T = unknown>(v: T): T[] => [v];
@@ -44,18 +46,50 @@ export const matchFromListSyntax = (input: string): ((result: number[][]) => num
     );
   };
 };
-export const parseIncludeExclude = (mode: "include" | "exclude", str: string, result: number[][]): number[][] => {
-  const isModeInclude = mode === "include";
-  const matches = (isModeInclude ? regInclude : regExclude).exec(str);
-  if (matches) {
-    const indices = matchFromListSyntax(matches[1])(result);
-    const filtered = result.filter((_, i) => {
-      const indicesHasIndex = indices.indexOf(i) > -1;
-      return isModeInclude ? indicesHasIndex : !indicesHasIndex;
-    });
-    return filtered;
+export const parseIncludeExclude = (
+  mode: "include" | "exclude" | "outside-include" | "outside-exclude",
+  str: string,
+  result: number[][]
+): number[][] => {
+  let regexp: null | RegExp = null;
+  let filterFn: (i: boolean) => boolean;
+  switch (mode) {
+    case "include":
+      regexp = regInclude;
+      filterFn = (x: boolean) => x;
+      break;
+    case "exclude":
+      regexp = regExclude;
+      filterFn = (x: boolean): boolean => !x;
+      break;
+    case "outside-include":
+      regexp = regOutsideInclude;
+      filterFn = (x: boolean) => x;
+      break;
+    case "outside-exclude":
+      regexp = regOutsideExclude;
+      filterFn = (x: boolean): boolean => !x;
+      break;
   }
-  return result;
+  if (!regexp) return result;
+  const matches = regexp.exec(str);
+  if (!matches) return result;
+  let indices: number[];
+  if (mode.indexOf("outside-") > -1) {
+    const [strSumTarget, ...rest] = matches[1].split(",");
+    const sumTarget = Number(strSumTarget);
+    const matcher = matchFromListSyntax(rest.join(","));
+    const outsiders = result.map((arr) => [sumTarget - sum(arr)]);
+    indices = matcher(outsiders);
+  } else {
+    const matcher = matchFromListSyntax(matches[1]);
+    indices = matcher(result);
+  }
+  const filtered = result.filter((_, i) => {
+    const indicesHasIndex = indices.indexOf(i) > -1;
+    return filterFn(indicesHasIndex);
+  });
+  return filtered;
 };
 
 export function tryParseForResult(reg: RegExp, str: string, fn: (...matches: string[]) => number[][]): false | number[][] {
@@ -116,17 +150,18 @@ export const groupToCombination = (str: string, data: Record<string, number[][][
   if (regKCombination.test(str)) {
     const matches = regKCombination.exec(str);
     if (!matches) return [];
-    const ksize = Number(matches[1]);
-    const iFirstComma = str.indexOf(",");
-    const iFirstParenthesisClosing = findClosingParenthesis(str, str.indexOf("("));
-    const content = trim(str.slice(iFirstComma + 1, iFirstParenthesisClosing));
-    const addition = trim(str.slice(iFirstParenthesisClosing + 1));
+    const [strKFn, strKSize, strRestArgs] = matches;
+    const ksize = Number(strKSize);
+    const [content] = strRestArgs.split(",");
+    const addition = trim(str.slice(strKFn.length));
     const combinations = groupToCombination(content, data);
     if (!combinations) return [];
     let result = combinations.flatMap((set) => kcombination(ksize, set));
     result = uniqBy(result, (arr) => arr.map(identity).sort().join(""));
     result = parseIncludeExclude("include", addition, result);
     result = parseIncludeExclude("exclude", addition, result);
+    result = parseIncludeExclude("outside-include", addition, result);
+    result = parseIncludeExclude("outside-exclude", addition, result);
     return result;
   }
   const resultAnyLiteral = tryParseForResult(regAnyLiteral, str, (m) => {

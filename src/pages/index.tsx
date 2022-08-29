@@ -45,7 +45,7 @@ const REPL: NextPage = () => {
     configure(monaco);
   }, [monaco]);
   return (
-    <div className="font-mono h-screen grid grid-rows-2 md:grid-cols-2">
+    <div className="font-mono h-screen grid grid-rows-2 md:grid-cols-2 md:grid-rows-1">
       <Editor
         language="yee"
         options={{

@@ -1,24 +1,28 @@
 import type { NextPage } from "next";
+import type { editor as EditorType } from "monaco-editor";
+import type { RecordOfFormations } from "types";
+
 import { useEffect, useRef, useState } from "react";
 import Editor, { useMonaco } from "@monaco-editor/react";
 import clone from "lodash/clone";
-import type { editor } from "monaco-editor";
-import { ResultLine } from "../components/REPLResultLine";
-import { crossReference, parseAll } from "../logic";
-import { configure } from "../editor";
+import { ResultLine } from "components/REPLResultLine";
+import { crossReference, parseAll } from "logic/parse";
+import { configure } from "editor";
+import { match, refCrossRef, regFormation } from "logic/regexps";
 
 const formatFormationsForPrint = (forms: number[][][]): string => forms.map((n) => "\t" + n.map((j) => j.join("")).join("-")).join("\n");
 
 const REPL: NextPage = () => {
   const monaco = useMonaco();
-  const refEditor = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const refEditor = useRef<EditorType.IStandaloneCodeEditor | null>(null);
   const editor = refEditor.current;
-  const [data, setData] = useState<Record<string, number[][][]>>({});
-  const render = (newData: Record<string, number[][][]>, newInstructs: string[]) => {
+  const editorContent = editor?.getValue();
+  const [data, setData] = useState<RecordOfFormations>({});
+  const render = (newData: RecordOfFormations, newInstructs: string[]) => {
     let shouldReapplyInstructions = true;
     let loop = 0;
     while (shouldReapplyInstructions && loop < 5) {
-      const copyOfData: Record<string, number[][][]> = {};
+      const copyOfData: RecordOfFormations = {};
       for (var k in newData) {
         copyOfData[k] = newData[k].map((x) => x);
       }
@@ -41,7 +45,7 @@ const REPL: NextPage = () => {
     configure(monaco);
   }, [monaco]);
   return (
-    <div className="h-screen flex flex-col">
+    <div className="font-mono h-screen grid grid-rows-2 md:grid-cols-2">
       <Editor
         language="yee"
         options={{
@@ -51,48 +55,11 @@ const REPL: NextPage = () => {
           cursorStyle: "line",
           fontSize: 14,
           lineHeight: 24,
+          wordWrap: "on",
+          lineNumbers: "off",
         }}
-        height="60vh"
         onMount={(editor, _monaco) => {
           refEditor.current = editor;
-          // register editor action
-          // editor.addAction({
-          //   id: "print-line-formations",
-          //   label: "Print Line Formations",
-          //   precondition: "editorTextFocus",
-          //   keybindings: [_monaco.KeyMod.CtrlCmd | _monaco.KeyCode.Enter],
-          //   run: async (_editor) => {
-          //     const model = _editor.getModel();
-          //     if (!model) return;
-          //     const selections = _editor.getSelections();
-          //     if (!selections) return;
-          //     // parseAll if data is empty
-          //     let latestData: Record<string, number[][][]>;
-          //     if (Object.keys(data).length === 0) {
-          //       console.log("reconstruct data because data is empty");
-          //       latestData = await new Promise((resolve) => {
-          //         parseAll(_editor.getValue(), (d: Record<string, number[][][]>) => resolve(d), clone(data));
-          //       });
-          //     } else {
-          //       latestData = data;
-          //     }
-          //     // create edits
-          //     const edits: editor.IIdentifiedSingleEditOperation[] = [];
-          //     selections.forEach((selection) => {
-          //       const { positionLineNumber, positionColumn } = selection;
-          //       const lineContent = model.getLineContent(positionLineNumber);
-          //       const matches = /^([A-Z]+\d+)\s?=/.exec(lineContent);
-          //       if (!matches) return;
-          //       const range = new _monaco.Range(positionLineNumber, positionColumn, positionLineNumber, positionColumn);
-          //       const forms = latestData[matches[1]];
-          //       if (!forms) return;
-          //       const text = `\n${formatFormationsForPrint(forms)}`;
-          //       edits.push({ range, text });
-          //     });
-          //     editor.executeEdits(undefined, edits);
-          //   },
-          // });
-          // load saved value from LocalStorage
           const savedValue = localStorage.getItem("editor-text");
           if (savedValue) {
             editor.setValue(savedValue);
@@ -105,28 +72,71 @@ const REPL: NextPage = () => {
           parseAll(value, render, clone(data));
         }}
       />
-      <div className="font-mono text-sm overflow-auto p-2 border-t">
-        {Object.keys(data).map((key: string) => (
-          <ResultLine
-            key={key + data[key].length}
-            name={key}
-            formations={data[key]}
-            onItemClick={({ name, groupIndex }) => {
-              if (!editor) return;
-              editor.trigger("keyboard", "type", { text: `${name}.${groupIndex} ` });
-            }}
-            onPrint={({ name }) => {
-              if (!editor || !monaco) return;
-              const selection = editor.getSelection();
-              if (!selection) return;
-              const text = "\n" + formatFormationsForPrint(data[name]);
-              const { positionLineNumber, positionColumn } = selection;
-              const range = new monaco.Range(positionLineNumber, positionColumn, positionLineNumber, positionColumn);
-              const edits: editor.IIdentifiedSingleEditOperation[] = [{ range, text }];
-              editor.executeEdits(undefined, edits);
-            }}
-          />
-        ))}
+      <div className="overflow-auto border-t pt-1 md:border-l px-1 md:pt-0">
+        {editorContent?.split("\n").map((line, index, contentLines) => {
+          const matchFormation = match(regFormation, line);
+          if (matchFormation.matched) {
+            const key = matchFormation.result[1];
+            return (
+              <ResultLine
+                key={index}
+                formations={data[key]}
+                name={key}
+                data={data}
+                onItemClick={({ name, groupIndex }) => {
+                  if (!editor) return;
+                  let textToAdd = `${name}.${groupIndex}`;
+                  const selection = editor.getSelection();
+                  if (selection) {
+                    const line = contentLines[selection.positionLineNumber - 1];
+                    const lineBeforeMe = line.slice(0, selection.positionColumn - 1);
+                    const charRightBefore = line[selection.positionColumn - 2];
+                    match(regFormation, line).then(() => {
+                      const behindAnOpenRefFn = match(/REF\([^)-]*?$/, lineBeforeMe);
+                      if (behindAnOpenRefFn.matched) {
+                        switch (charRightBefore) {
+                          case "(":
+                          case ",":
+                            // prepend nothing
+                            break;
+                          default:
+                            textToAdd = `,${textToAdd}`;
+                        }
+                      } else {
+                        // End of line
+                        textToAdd = `REF(${textToAdd})`;
+                        if (charRightBefore !== "-") textToAdd = `-${textToAdd}`;
+                      }
+                      return true;
+                    }) ||
+                      match(refCrossRef, line).then(() => {
+                        if (charRightBefore !== " ") textToAdd = ` ${textToAdd}`;
+                        return true;
+                      });
+                  }
+                  editor.trigger("keyboard", "type", { text: textToAdd });
+                  editor.focus();
+                }}
+                onPrint={({ name }) => {
+                  if (!editor || !monaco) return;
+                  const selection = editor.getSelection();
+                  if (!selection) return;
+                  const text = "\n" + formatFormationsForPrint(data[name]);
+                  const { positionLineNumber, positionColumn } = selection;
+                  const range = new monaco.Range(positionLineNumber, positionColumn, positionLineNumber, positionColumn);
+                  const edits: EditorType.IIdentifiedSingleEditOperation[] = [{ range, text }];
+                  editor.executeEdits(undefined, edits);
+                  editor.focus();
+                }}
+              />
+            );
+          }
+          return (
+            <div key={index} className="h-[24px]">
+              &nbsp;
+            </div>
+          );
+        })}
       </div>
     </div>
   );

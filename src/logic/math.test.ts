@@ -1,5 +1,4 @@
-import { formation } from ".";
-import { combination, cartesian, kcombination } from "./math";
+import { formation, combination, cartesian, kcombination } from "./math";
 
 describe("combination", () => {
   test("size = 2", () => {

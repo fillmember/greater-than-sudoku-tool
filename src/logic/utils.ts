@@ -11,18 +11,14 @@ export function block(index: number): number {
   return Math.floor(y / 3) * 3 + Math.floor(x / 3);
 }
 
-export function findClosingParenthesis(str: string, startIndex = 0) {
+export function findClosingParenthesis(str: string, startIndex = 0, { open = "(", close = ")" } = {}) {
   let index = startIndex;
   let counter = 1;
   while (counter > 0 && index < str.length) {
     index = index + 1;
     const c = str[index];
-    if (c === "(") counter++;
-    if (c === ")") counter--;
+    if (c === open) counter++;
+    if (c === close) counter--;
   }
   return index;
 }
-
-export * from "./set";
-export * from "./math";
-export * from "./parse";

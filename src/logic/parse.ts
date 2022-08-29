@@ -1,16 +1,23 @@
-import debounce from "lodash/debounce";
-import get from "lodash/get";
-import range from "lodash/range";
-import trim from "lodash/trim";
-import uniq from "lodash/uniq";
-import uniqBy from "lodash/uniqBy";
-import inRange from "lodash/inRange";
-import sum from "lodash/sum";
-import pick from "lodash/pick";
-import identity from "lodash/identity";
-import { cartesian, kcombination, formation, combination, digits, findClosingParenthesis } from ".";
-import { intersect, arsig } from "../logic/set";
+import { debounce, get, range, trim, uniq, uniqBy, inRange, sum, pick, identity, lowerCase } from "lodash";
+import { digits, findClosingParenthesis } from "./utils";
+import { cartesian, kcombination, formation, combination } from "./math";
+import { intersect, arsig, hasOverlap } from "../logic/set";
 import { compareAandB, getArgs2, getCommandHead } from "./commands";
+import {
+  regInclude,
+  regExclude,
+  regSingle,
+  regCombinationLiteral,
+  regFormationLiteral,
+  regREF,
+  regKCombination,
+  regAnyLiteral,
+  regSum,
+  refCrossRef,
+  regFormation,
+  match,
+  regFormationPosition,
+} from "./regexps";
 
 const wrapWithArray = <T = unknown>(v: T): T[] => [v];
 function splitToNumbers(input: string, delimiter = ""): number[] {
@@ -51,16 +58,6 @@ export const parseIncludeExclude = (mode: "include" | "exclude", str: string, re
   return result;
 };
 
-export const regSum = /^([\d\~\,]+)\s?in\s?(\d+)/;
-export const regInclude = /\+\(([\d,]+)\)/;
-export const regExclude = /\!\(([\d,]+)\)/;
-export const regSingle = /^(\d+)$/; // 3
-export const regAnyLiteral = /^(\.+)/; // ...
-export const regCombinationLiteral = /^\((\d+)\)$/; // (123)
-export const regFormationLiteral = /^\[[\d,]+\]$/; // [12,13,14]
-export const regKCombination = /^K\(\s?(\d)\s?,.+\)/;
-export const regREF = /^REF\((.+)\)/;
-
 export function tryParseForResult(reg: RegExp, str: string, fn: (...matches: string[]) => number[][]): false | number[][] {
   const matches = reg.exec(str);
   if (!matches) return false;
@@ -73,7 +70,7 @@ export function tryParseForResult(reg: RegExp, str: string, fn: (...matches: str
   return result;
 }
 
-const groupToCombination = (str: string, data: Record<string, number[][][]>): number[][] => {
+export const groupToCombination = (str: string, data: Record<string, number[][][]>): number[][] => {
   // simple ones without include/exclude
   if (regSingle.test(str)) {
     return [splitToNumbers(str)];
@@ -165,189 +162,208 @@ export const parse = (line: string, data: Record<string, number[][][]>): number[
     .filter((arr) => arr instanceof Array && arr.length > 0);
   return formation(...combinations);
 };
-export const regFormation = /^(?:F\s)|(?:[A-Z]\d\s?=\s?)/;
-export const refCrossRef = /^INTERSECT|SEE|SUM|A<B|A>B|A<=B|A=B|A>=B|BORDER|A_HAS_B|A_IN_B|FN/;
+
 export const crossReference = (line: string, data: Record<string, number[][][]>) => {
-  const crossReferenceMatches = refCrossRef.exec(line);
-  if (crossReferenceMatches) {
-    try {
-      const [command, restOfArgs] = getCommandHead(line);
-      switch (command) {
-        case "FN": {
-          const code = line.slice(command.length);
-          try {
-            const fn = new Function("d", "t", code);
-            fn(data, { sum, arsig });
-            return true;
-          } catch (error) {
-            console.log("silently failing at running user function", error);
-            return false;
-          }
-        }
-        case "A_IN_B": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          data[nameA] = data[nameA].filter((formA) => {
-            const a: number[] = get(formA, indexA);
-            const result = data[nameB].some((formB) => {
-              const b: number[] = get(formB, indexB);
-              return a.every((digit: number) => b.indexOf(digit) > -1);
-            });
-            return result;
-          });
+  if (refCrossRef.test(line) === false) return;
+  try {
+    const [command, restOfArgs] = getCommandHead(line);
+    switch (command) {
+      case "FN": {
+        const code = line.slice(command.length);
+        try {
+          const fn = new Function("d", "t", code);
+          const has = (set: any, target: any) => set.indexOf(target) > -1;
+          fn(data, { sum, has });
           return true;
-        }
-        case "A_HAS_B": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          data[nameA] = data[nameA].filter((formA) => {
-            const a: number[] = get(formA, indexA);
-            const result = data[nameB].some((formB) => {
-              const b: number[] = get(formB, indexB);
-              return b.every((digit: number) => a.indexOf(digit) > -1);
-            });
-            return result;
-          });
-          data[nameB] = data[nameB].filter((formB) => {
-            const b: number[] = get(formB, indexB);
-            const result = data[nameA].some((formA) => {
-              const a: number[] = get(formA, indexA);
-              return b.every((digit: number) => a.indexOf(digit) > -1);
-            });
-            return result;
-          });
-          return true;
-        }
-        case "INTERSECT": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          const targetA = uniq(data[nameA].map((arr) => get(arr, indexA)));
-          const targetB = uniq(data[nameB].map((arr) => get(arr, indexB)));
-          const intersected = intersect(targetA, targetB);
-          const sigsToKeep = intersected.map(arsig);
-          data[nameA] = data[nameA].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexA))) > -1);
-          data[nameB] = data[nameB].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexB))) > -1);
-          return true;
-        }
-        case "SEE": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          const zipped = cartesian(data[nameA], data[nameB]).filter(([a, b]) => {
-            const union = [...get(a, indexA), ...get(b, indexB)];
-            return uniq(union).length === union.length;
-          });
-          data[nameA] = uniq(zipped.map((arr) => arr[0]));
-          data[nameB] = uniq(zipped.map((arr) => arr[1]));
-          return true;
-        }
-        case "SUM": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          let min: number, max: number;
-          const numArg2 = Number(restOfArgs[2]);
-          const numArg3 = Number(restOfArgs[3]);
-          if (Number.isNaN(numArg3)) {
-            min = numArg2;
-            max = numArg2 + 1;
-          } else {
-            min = numArg2;
-            max = numArg3 + 1;
-          }
-          // algorithm for cases where the sum is considering 2 different lines
-          if (nameA !== nameB) {
-            data[nameA] = data[nameA].filter((set) => {
-              const sa = sum(get(set, indexA));
-              return data[nameB].some((setb) => inRange(sa + sum(get(setb, indexB)), min, max));
-            });
-            data[nameB] = data[nameB].filter((set) => {
-              const sb = sum(get(set, indexB));
-              return data[nameA].some((seta) => inRange(sb + sum(get(seta, indexA)), min, max));
-            });
-          } else {
-            // algorithm for cases where the sum is considering within the same line
-            data[nameA] = data[nameA].filter((set) => {
-              const a = get(set, indexA);
-              const b = get(set, indexB);
-              return inRange(sum(a) + sum(b), min, max);
-            });
-          }
-          return true;
-        }
-        case "A>B": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          compareAandB(">", data, nameA, indexA, nameB, indexB);
-          return true;
-        }
-        case "A<B": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          compareAandB("<", data, nameA, indexA, nameB, indexB);
-          return true;
-        }
-        case "A>=B": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          compareAandB(">=", data, nameA, indexA, nameB, indexB);
-          return true;
-        }
-        case "A<=B": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          compareAandB("<=", data, nameA, indexA, nameB, indexB);
-          return true;
-        }
-        case "A=B": {
-          if (typeof restOfArgs === "string") return;
-          const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
-          compareAandB("=", data, nameA, indexA, nameB, indexB);
-          return true;
-        }
-        case "BORDER": {
-          if (typeof restOfArgs === "string") return;
-          const [nameA, nameB, ...rawRelations] = restOfArgs;
-          const relations = rawRelations
-            .map((rule) => {
-              const [indexA, indexB, sumInput] = rule.split(/[\+\=]/);
-              let sum = [];
-              if (sumInput.indexOf("~") > -1) {
-                sum = sumInput.split("~").map(Number);
-              } else {
-                const n = Number(sumInput);
-                sum = [n, n + 1];
-              }
-              return { indexA: Number(indexA), indexB: Number(indexB), sum };
-            })
-            .filter((x) => Object.values(x).every((n) => !Number.isNaN(n) && n !== undefined));
-          const disjoint = (a: number[], b: number[]): boolean => {
-            const sa = arsig(a);
-            const sb = arsig(b).split("");
-            return sb.every((digit) => sa.indexOf(digit) === -1);
-          };
-          data[nameA] = data[nameA].filter((groupA) =>
-            data[nameB].some((groupB) =>
-              relations.every(
-                ({ indexA, indexB, sum: target }) =>
-                  inRange(sum(groupA[indexA]) + sum(groupB[indexB]), target[0], target[1] + 1) && disjoint(groupA[indexA], groupB[indexB])
-              )
-            )
-          );
-          data[nameB] = data[nameB].filter((groupB) =>
-            data[nameA].some((groupA) =>
-              relations.every(
-                ({ indexA, indexB, sum: target }) =>
-                  inRange(sum(groupB[indexB]) + sum(groupA[indexA]), target[0], target[1] + 1) && disjoint(groupA[indexA], groupB[indexB])
-              )
-            )
-          );
-          return true;
+        } catch (error) {
+          console.log("silently failing at running user function", error);
+          return false;
         }
       }
-    } catch (error) {
-      console.error("crossRef error", error);
+      case "A_IN_B": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        data[nameA] = data[nameA].filter((formA) => {
+          const a: number[] = get(formA, indexA);
+          const result = data[nameB].some((formB) => {
+            const b: number[] = get(formB, indexB);
+            return a.every((digit: number) => b.indexOf(digit) > -1);
+          });
+          return result;
+        });
+        return true;
+      }
+      case "A_HAS_B": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        data[nameA] = data[nameA].filter((formA) => {
+          const a: number[] = get(formA, indexA);
+          const result = data[nameB].some((formB) => {
+            const b: number[] = get(formB, indexB);
+            return b.every((digit: number) => a.indexOf(digit) > -1);
+          });
+          return result;
+        });
+        data[nameB] = data[nameB].filter((formB) => {
+          const b: number[] = get(formB, indexB);
+          const result = data[nameA].some((formA) => {
+            const a: number[] = get(formA, indexA);
+            return b.every((digit: number) => a.indexOf(digit) > -1);
+          });
+          return result;
+        });
+        return true;
+      }
+      case "INTERSECT": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        const targetA = uniq(data[nameA].map((arr) => get(arr, indexA)));
+        const targetB = uniq(data[nameB].map((arr) => get(arr, indexB)));
+        const intersected = intersect(targetA, targetB);
+        const sigsToKeep = intersected.map(arsig);
+        data[nameA] = data[nameA].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexA))) > -1);
+        data[nameB] = data[nameB].filter((form) => sigsToKeep.indexOf(arsig(get(form, indexB))) > -1);
+        return true;
+      }
+      case "SEE": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        const zipped = cartesian(data[nameA], data[nameB]).filter(([a, b]) => {
+          const union = [...get(a, indexA), ...get(b, indexB)];
+          return uniq(union).length === union.length;
+        });
+        data[nameA] = uniq(zipped.map((arr) => arr[0]));
+        data[nameB] = uniq(zipped.map((arr) => arr[1]));
+        return true;
+      }
+      case "SUM": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        const { unique = true } = restOfArgs.slice(3).reduce((options, currentItem) => {
+          switch (lowerCase(trim(currentItem, "- "))) {
+            case "-no-overlap":
+            case "-u":
+            case "unique":
+              return { ...options, unique: true };
+            case "-allow-overlap":
+            case "notunique":
+              return { ...options, unique: false };
+            default:
+              return options;
+          }
+        }, {} as Record<string, boolean>);
+        let min: number, max: number;
+        const numArg2 = Number(restOfArgs[2]);
+        const numArg3 = Number(restOfArgs[3]);
+        if (Number.isNaN(numArg3)) {
+          min = numArg2;
+          max = numArg2 + 1;
+        } else {
+          min = numArg2;
+          max = numArg3 + 1;
+        }
+        // algorithm for cases where the sum is considering 2 different lines
+        if (nameA !== nameB) {
+          data[nameA] = data[nameA].filter((set) => {
+            const _a = get(set, indexA);
+            const sa = sum(_a);
+            return data[nameB].some((setb) => {
+              const _b = get(setb, indexB);
+              return inRange(sa + sum(_b), min, max) && (unique ? !hasOverlap(_a, _b) : true);
+            });
+          });
+          data[nameB] = data[nameB].filter((set) => {
+            const _b = get(set, indexB);
+            const sb = sum(_b);
+            return data[nameA].some((seta) => {
+              const _a = get(seta, indexA);
+              return inRange(sb + sum(_a), min, max) && (unique ? !hasOverlap(_a, _b) : true);
+            });
+          });
+        } else {
+          // algorithm for cases where the sum is considering within the same line
+          data[nameA] = data[nameA].filter((set) => {
+            const a = get(set, indexA);
+            const b = get(set, indexB);
+            return inRange(sum(a) + sum(b), min, max);
+          });
+        }
+        return true;
+      }
+      case "A>B": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        compareAandB(">", data, nameA, indexA, nameB, indexB);
+        return true;
+      }
+      case "A<B": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        compareAandB("<", data, nameA, indexA, nameB, indexB);
+        return true;
+      }
+      case "A>=B": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        compareAandB(">=", data, nameA, indexA, nameB, indexB);
+        return true;
+      }
+      case "A<=B": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        compareAandB("<=", data, nameA, indexA, nameB, indexB);
+        return true;
+      }
+      case "A=B": {
+        if (typeof restOfArgs === "string") return;
+        const { nameA, indexA, nameB, indexB } = getArgs2(restOfArgs);
+        compareAandB("=", data, nameA, indexA, nameB, indexB);
+        return true;
+      }
+      case "BORDER": {
+        if (typeof restOfArgs === "string") return;
+        const [nameA, nameB, ...rawRelations] = restOfArgs;
+        const relations = rawRelations
+          .map((rule) => {
+            const [indexA, indexB, sumInput] = rule.split(/[\+\=]/);
+            let sum = [];
+            if (sumInput.indexOf("~") > -1) {
+              sum = sumInput.split("~").map(Number);
+            } else {
+              const n = Number(sumInput);
+              sum = [n, n + 1];
+            }
+            return { indexA: Number(indexA), indexB: Number(indexB), sum };
+          })
+          .filter((x) => Object.values(x).every((n) => !Number.isNaN(n) && n !== undefined));
+        const disjoint = (a: number[], b: number[]): boolean => {
+          const sa = arsig(a);
+          const sb = arsig(b).split("");
+          return sb.every((digit) => sa.indexOf(digit) === -1);
+        };
+        data[nameA] = data[nameA].filter((groupA) =>
+          data[nameB].some((groupB) =>
+            relations.every(
+              ({ indexA, indexB, sum: target }) =>
+                inRange(sum(groupA[indexA]) + sum(groupB[indexB]), target[0], target[1] + 1) && disjoint(groupA[indexA], groupB[indexB])
+            )
+          )
+        );
+        data[nameB] = data[nameB].filter((groupB) =>
+          data[nameA].some((groupA) =>
+            relations.every(
+              ({ indexA, indexB, sum: target }) =>
+                inRange(sum(groupB[indexB]) + sum(groupA[indexA]), target[0], target[1] + 1) && disjoint(groupA[indexA], groupB[indexB])
+            )
+          )
+        );
+        return true;
+      }
     }
-    return false;
+  } catch (error) {
+    console.error("crossRef error", error);
   }
+  return false;
 };
 export const parseAll = debounce((value: string, submit, existingData: Record<string, number[][][]> = {}) => {
   const data: Record<string, number[][][]> = existingData;
@@ -360,19 +376,15 @@ export const parseAll = debounce((value: string, submit, existingData: Record<st
       if (trim(line)[0] === "#") {
         return;
       }
-      const formationMatches = regFormation.exec(line);
-      if (formationMatches) {
-        const head = formationMatches[0];
-        const formations = parse(line.slice(head.length), data);
-        const key = trim(head, " =");
-        data[key] = formations;
-        dataKeysToKeep.push(key);
-        return;
-      }
-      const crossRef = crossReference(line, data);
-      if (crossRef) {
-        instructions.push(line);
-      }
+      match(regFormation, line).then(([_, head, strFormation]) => {
+        const formations = parse(trim(strFormation), data);
+        data[head] = formations;
+        dataKeysToKeep.push(head);
+      });
+      match(regFormationPosition, line).then(([_, position]) => {});
+      match(refCrossRef, line).then(() => {
+        crossReference(line, data) && instructions.push(line);
+      });
     });
   submit(pick(data, dataKeysToKeep), instructions);
 }, 500);
